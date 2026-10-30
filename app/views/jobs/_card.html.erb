@@ -1,0 +1,35 @@
+<article class="card">
+  <p class="card__company"><%= job.company %></p>
+  <h2 class="card__title"><%= job.title %></h2>
+  <p class="card__position">
+    <%= job.position %>
+    <% job.job_types.each do |type| %><span class="tag tag--muted"><%= type %></span><% end %>
+  </p>
+
+  <dl class="card__facts">
+    <dt>給料</dt>
+    <dd>
+      <% if job.salary_min || job.salary_max %>
+        <%= job.salary_min %>万 〜 <%= job.salary_max %>万円
+      <% else %>
+        記載なし
+      <% end %>
+    </dd>
+    <dt>技術</dt>
+    <dd>
+      <% job.technologies.each do |tech| %><span class="tag tag--tech"><%= tech %></span><% end %>
+      <%= "記載なし" if job.technologies.empty? %>
+    </dd>
+    <dt>特徴</dt>
+    <dd>
+      <% job.features.each do |feature| %><span class="tag"><%= feature %></span><% end %>
+    </dd>
+  </dl>
+
+  <details class="card__description">
+    <summary>業務内容を読む</summary>
+    <%= simple_format(job.description) %>
+  </details>
+
+  <p class="card__source"><%= link_to "paizaで元の求人を見る", job.raw_document.url, target: "_blank", rel: "noopener" %></p>
+</article>

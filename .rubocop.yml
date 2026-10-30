@@ -1,0 +1,21 @@
+# Omakase Ruby styling for Rails
+inherit_gem: { rubocop-rails-omakase: rubocop.yml }
+
+# テストは rubocop-rspec のデフォルト設定から始める（CLAUDE.md「Lint」）。
+# 無効化・緩和するときは、承認を得て理由をここにコメントで残す
+plugins:
+  - rubocop-rspec
+
+# context を日本語で書くため（2026-10-25 承認）。日本語では条件を表す語（とき/場合）が文末に来るので、
+# デフォルトの「when/with/without で始める」を「とき/場合 で終わる」に置き換える
+RSpec/ContextWording:
+  Prefixes: []
+  AllowedPatterns:
+    - "とき\\z"
+    - "場合\\z"
+
+# Overwrite or add rules to create your own house style
+#
+# # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
+# Layout/SpaceInsideArrayLiteralBrackets:
+#   Enabled: false

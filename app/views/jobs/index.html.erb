@@ -1,0 +1,19 @@
+<% content_for :title, "今日の求人 | Technology Radar" %>
+
+<header class="page-header">
+  <h1>今日の求人</h1>
+  <nav><%= link_to "+1 の一覧", liked_jobs_path %></nav>
+</header>
+
+<% if @job %>
+  <p class="remaining">未評価 <%= @remaining %> 件</p>
+  <%= render "card", job: @job %>
+
+  <div class="actions">
+    <%= button_to "-1", job_reaction_path(@job), params: { verdict: "bad" }, class: "button button--bad" %>
+    <%= link_to "スキップ", root_path(after: @job.id), class: "button button--skip" %>
+    <%= button_to "+1", job_reaction_path(@job), params: { verdict: "good" }, class: "button button--good" %>
+  </div>
+<% else %>
+  <p class="empty">未評価の求人はありません。</p>
+<% end %>

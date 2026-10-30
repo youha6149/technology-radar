@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <!-- 架空の求人。paiza の求人詳細ページの構造をまねている（実在の求人データは公開しない）。
+       「おとり」は、Parser の選び方が雑だった場合に代わりに拾われてしまう要素。正しい要素より前に置く -->
+
+  <!-- おとり(title): <title> には末尾にサイト名が付く。title は <h1> から取る -->
+  <title>おとり: title タグの求人タイトル | ITエンジニア専門の転職サイト【paiza転職】</title>
+
+  <!-- 給料の優先順位: JSON-LD と「給与(想定年収)」欄の両方があり、値が違う。JSON-LD を優先する（おとりは欄の方: 111万〜222万） -->
+  <!-- おとり(position): JSON-LD の title は Schema.org では職種名。position は「職種名」の欄から取る -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org/",
+    "@type": "JobPosting",
+    "title": "おとり: JSON-LD の職種名",
+    "hiringOrganization": { "@type": "Organization", "name": "株式会社サンプル" },
+    "baseSalary": {
+      "@type": "MonetaryAmount",
+      "currency": "JPY",
+      "value": { "@type": "QuantitativeValue", "unitText": "YEAR", "minValue": 5000000, "maxValue": 8000000 }
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <!-- おとり(company): クラスなしの h2 -->
+  <h2>おとり: クラスなしの h2</h2>
+
+  <!-- 本物のページでは、会社名の h2 はページ上部の見出しエリアと、末尾の企業情報のボックスの2か所にある -->
+  <div class="m-heading-area">
+    <h1>架空の求人タイトル【リモート可】Rails で社内ツールを作る</h1>
+    <h2 class="a-heading-primary-large">株式会社サンプル</h2>
+  </div>
+
+  <!-- おとり(description): 「求人概要」の欄より前にある別の欄の説明文 -->
+  <div class="o-recruiters-show__toggle-section">
+    <label class="o-recruiters-show__section-title">
+      <h3 class="a-heading-primary-large">お知らせ</h3>
+    </label>
+    <div class="o-recruiters-show__toggle-content">
+      <div class="o-recruiters-show__content-text">
+        <p>おとり: 求人概要より前にある、別の欄の文章です。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="o-recruiters-show__toggle-section">
+    <input checked class="o-recruiters-show__toggle-trigger" id="job-offer-summary" type="checkbox">
+    <label class="o-recruiters-show__section-title" for="job-offer-summary">
+      <h3 class="a-heading-primary-large" id="job-offer-summary-heading">求人概要</h3>
+    </label>
+    <div class="o-recruiters-show__toggle-content">
+      <div class="o-recruiters-show__content-text">
+        更新日：2026/10/01
+      </div>
+      <div class="o-recruiters-show__content-text">
+        <p>株式会社サンプルは、架空の会社です。
+          社内向けの業務ツールを
+          Rails で開発しています。<br>
+          <br>
+          チームは5名で、全員がフルリモートです。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <dl class="m-definitions-responsive">
+    <!-- おとり(job_types): 「職種」を含む「職種名」の欄が、「職種」より前にある -->
+    <dt class="m-definitions-responsive__term">職種名</dt>
+    <dd class="m-definitions-responsive__description">Webアプリケーションエンジニア</dd>
+    <dt class="m-definitions-responsive__term">ポジション</dt>
+    <dd class="m-definitions-responsive__description">テックメンバー</dd>
+    <dt class="m-definitions-responsive__term">職種</dt>
+    <dd class="m-definitions-responsive__description">バックエンド/サーバサイド、フロントエンド</dd>
+    <dt class="m-definitions-responsive__term">給与(想定年収)</dt>
+    <dd class="m-definitions-responsive__description">111万 〜 222万円 （おとり: JSON-LD を優先するので、この欄の値は使われない）</dd>
+
+    <dt class="m-definitions-responsive__term">主要開発技術</dt>
+    <dd class="m-definitions-responsive__description">
+      <span class="p-job-offer-lang-label-link--green">Ruby</span>
+    </dd>
+    <dt class="m-definitions-responsive__term">開発言語</dt>
+    <dd class="m-definitions-responsive__description">
+      <span class="p-job-offer-lang-label-link--green">TypeScript</span>
+      <span class="p-job-offer-lang-label-link--green">SQL</span>
+    </dd>
+    <dt class="m-definitions-responsive__term">フレームワーク</dt>
+    <dd class="m-definitions-responsive__description">
+      <span class="p-job-offer-lang-label-link--blue">Ruby on Rails</span>
+      <span class="p-job-offer-lang-label-link--blue">React</span>
+    </dd>
+    <dt class="m-definitions-responsive__term">クラウドプラットフォーム</dt>
+    <dd class="m-definitions-responsive__description">
+      <p>Amazon Web Services、Google Cloud</p>
+    </dd>
+    <dt class="m-definitions-responsive__term">データベース</dt>
+    <dd class="m-definitions-responsive__description">PostgreSQL、Redis</dd>
+
+    <!-- おとり(technologies): 「、」区切りだが技術ではない欄（本物のページでは「自社製品/自社サービス、B2B、SaaS」などが入る） -->
+    <dt class="m-definitions-responsive__term">開発内容タイプ</dt>
+    <dd class="m-definitions-responsive__description">おとり: 開発内容タイプ1、おとり: 開発内容タイプ2</dd>
+
+    <!-- おとり(features): 「特徴」を含む別の欄が、「特徴」より前にある -->
+    <dt class="m-definitions-responsive__term">その他の特徴</dt>
+    <dd class="m-definitions-responsive__description">
+      <span class="p-job-offer-lang-label-link--gray">おとり: その他の特徴</span>
+    </dd>
+    <!-- おとり(technologies): 技術と同じ形の span のラベルだが、特徴の欄 -->
+    <dt class="m-definitions-responsive__term">特徴</dt>
+    <dd class="m-definitions-responsive__description">
+      <span class="p-job-offer-lang-label-link--gray">フルリモート</span>
+      <span class="p-job-offer-lang-label-link--gray">副業OK</span>
+      <span class="p-job-offer-lang-label-link--gray">フレックス</span>
+    </dd>
+  </dl>
+
+  <!-- 企業情報のボックス（会社名の h2 の2か所目） -->
+  <div class="m-recruiter-feature">
+    <h2 class="a-heading-primary-large">株式会社サンプル</h2>
+  </div>
+</body>
+
+</html>

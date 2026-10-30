@@ -1,0 +1,14 @@
+<% content_for :title, "+1 の一覧 | Technology Radar" %>
+
+<header class="page-header">
+  <h1>+1 の一覧</h1>
+  <nav><%= link_to "今日の求人", root_path %></nav>
+</header>
+
+<% if @jobs.any? %>
+  <% @jobs.each do |job| %>
+    <%= render "card", job: job %>
+  <% end %>
+<% else %>
+  <p class="empty">まだ +1 を付けた求人はありません。</p>
+<% end %>
