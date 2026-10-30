@@ -5,6 +5,11 @@ updates:
   schedule:
     interval: daily
   open-pull-requests-limit: 10
+  ignore:
+    # json 3.x は ActiveSupport 8.0 の json カラムのシリアライズ（JSON.generate の quirks_mode 引数）と合わず、
+    # マイグレーションが ArgumentError になるため Gemfile で 2.x に固定している。Rails を上げて解消したら外す
+    - dependency-name: json
+      update-types: ["version-update:semver-major"]
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
