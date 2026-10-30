@@ -56,6 +56,6 @@
 
 | 担当 | 仕事 |
 |---|---|
-| `Scraper::PoliteHttpClient` | User-Agent、5秒間隔（`sleeper:` で外から渡す）、リダイレクトを追わない、403 / 429 は「拒否された」例外 |
+| `Scraper::PoliteHttpClient` | User-Agent、2回目以降に5秒待つ（`sleeper:` で外から渡す）、リダイレクトを追わない、タイムアウトを短めに明示。成功は200だけ。403 / 429 は `AccessRefused`、それ以外の失敗（3xx・404・500・タイムアウト・接続できない）は `RequestFailed` |
 | `Scraper::PaizaFetcher` | sitemap を lastmod の新しい順に並べる、取得済みを飛ばす（`skip:`）、`limit:` 件で止める |
 | `Scraper::Runner`（予定） | 1日30件という値を `limit:` で渡す。sitemap が取れない・403 / 429 なら中断、詳細ページ1件の失敗は飛ばして続ける |
