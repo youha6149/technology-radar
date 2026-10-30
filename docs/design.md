@@ -55,7 +55,7 @@
 - robots.txt と利用規約の両方で禁止されていないサイトの、ログイン不要な公開ページに限る
 - 一覧はsitemapから取る（サイトが機械向けに公開している正規の入口）。詳細ページのパスがrobots.txtで許可されているかはサイトごとに確認する
 - paizaのsitemap（gzipで431KB）から `/career/job_offers/{id}` のURLだけを使う（約2.2万件。`student/` や `en_try/` は対象外）。`<lastmod>` の新しい順に並べ、未取得のものだけ詳細を取る。sitemap自体の取得は1日1回まで
-- HTMLの取得は1サイト1日30件まで、リクエスト間隔は5秒以上、手動実行
+- HTMLの取得は1サイト1日30件まで、リクエスト間隔は5秒以上。実行は1日1回、自動（2026-10-30 に「手動実行」から変更。定期実行のため。量は変えないので取得元への負担は同じ）
 - 取得済みURLは再取得しない
 - User-Agentはブラウザを装わず、正直に名乗る（例: `technology-radar (personal use)`）。403などで弾かれたら回避しない
 
@@ -88,7 +88,7 @@
 - **`paiza_lib/paiza/` の20件はページ全体ではない**。`fetch_job_pages.rb` が `.o-recruiters-show` の部分だけを切り出して保存しているため、`<title>`・`<h1>`・JSON-LD がない。原文のフィクスチャには使えない
 
 ### 構成（Railsアプリの中で名前空間を分ける）
-- 取得部分は `lib/scraper/`（`Scraper::`）に置き（2026-10-25 に `Ingestion` から改名。取得元がpaizaだけの今は「何をしているか」が一目でわかる名前を優先する。APIの取得元を足すときに名前を見直す）、rakeタスク（`jobs:fetch` / `jobs:reparse`）から手動で動かす。デプロイ後はサーバーで動かす
+- 取得部分は `lib/scraper/`（`Scraper::`）に置き（2026-10-25 に `Ingestion` から改名。取得元がpaizaだけの今は「何をしているか」が一目でわかる名前を優先する。APIの取得元を足すときに名前を見直す）、rakeタスク（`scraper:fetch` / `scraper:reparse`）から動かす。デプロイ後はサーバーで、Solid Queue の定期ジョブ（`config/recurring.yml`）から1日1回動かす
 - 画面側（controllers / views）は `Scraper::` を参照しない。モデル（RawDocument / Job / Reaction / Reason）は両方から使う
 - リポジトリは分けない。DBを共有する以上、分けるとスキーマ・モデルの持ち主が2つになり、依存が見えなくなる（共有データベース）。必要になれば `lib/scraper/` を切り出せばよい
 - `app/` ではなく `lib/` に置く理由: Zeitwerk では `app/` 直下のディレクトリがそれぞれ読み込みの起点になるため、`app/scraper/paiza_parser.rb` は `Scraper::PaizaParser` ではなく `PaizaParser` になる。Rails 8 の `config.autoload_lib` で `lib/scraper/paiza_parser.rb` は `Scraper::PaizaParser` として読み込まれる
@@ -123,6 +123,48 @@ rake jobs:reparse ……………………… 保存済みの原文に ParseRawD
 | 取得の失敗 | HTTPエラー・タイムアウト | 何も保存しない。URLは未取得のまま残り、次回自然に取り直される |
 | 原文の保存失敗 | DBエラー | 記録する先がないので例外としてログに出す |
 | parseの失敗 | 原文は保存できたが、jobsに変換できない（必須項目がない、ページの構造が変わった等） | `raw_documents.parse_error` に記録し、次の原文へ進む。再抽出に成功したらNULLに戻す |
+
+### 取得部分（PoliteHttpClient / PaizaFetcher）の設計（2026-10-30）
+
+```ruby
+client  = Scraper::PoliteHttpClient.new(user_agent: "technology-radar (personal use)", interval: 5)
+client.get(url)   # → 本文（String）。200以外は例外。3xx も例外（追わない）。403 / 429 は「拒否された」専用の例外
+
+fetcher = Scraper::PaizaFetcher.new(client: client)
+fetcher.fetch_new(limit: 30, skip: ->(url) { RawDocument.exists?(url: url) })   # → [Payload(url, content_type, body)]
+```
+
+**仕事の分け方**: 「取得元が変わっても同じか？」で分ける。同じなら PoliteHttpClient、取得元ごとに違うなら Fetcher。
+
+| 仕事 | 担当 | 理由 |
+|---|---|---|
+| User-Agent を付ける | PoliteHttpClient | リクエストそのものの共通部分 |
+| 5秒間隔をあける | PoliteHttpClient | sitemap と詳細ページの間も含め、どのリクエストにも必要。Fetcher に書くと取得元を増やすたびに書くことになり、書き忘れが即ルール違反になる。「最後にリクエストした時刻」の状態もここが持つ |
+| リダイレクトを追わない（3xx は失敗） | PoliteHttpClient | HTTP のレベルの決まりで、取得元に関係なく同じにしたい |
+| sitemap を `lastmod` の新しい順に並べる | PaizaFetcher | paiza 固有 |
+| 取得済みの URL を飛ばす | PaizaFetcher | `skip:` で受け取るので、Fetcher は DB を知らずに済む |
+| 決めた件数で止める | PaizaFetcher | 件数そのもの（1日30件）は Runner から `limit:` で渡す（下記） |
+
+- **テストで5秒待たない**: 待つ処理を `sleeper:` で外から渡す（依存性の注入）。本番は `->(s) { sleep(s) }`、テストは呼ばれた秒数を記録するだけのものを渡し、「待つ処理を呼んだこと」を確かめる。`sleep` をテストの中でスタブすると、テスト対象の中身に依存する（`RSpec/SubjectStub`）
+- **途中で失敗したとき**: 失敗の影響が届く範囲で分ける
+
+  | 失敗 | 影響の範囲 | 扱い |
+  |---|---|---|
+  | sitemap が取れない | 全体（どの URL を取るか決まらない） | すぐ中断 |
+  | 詳細ページ1件が 404 / タイムアウト | その1件だけ | 飛ばして続ける。原文を保存しないので、翌日に自然に取り直される |
+  | 403 / 429 | サイトが「やめてほしい」と言っている合図 | すぐ全体を中断する（拒否されたら回避しない） |
+
+**「1日30件」の方針と、止める処理の実装を分ける**
+- 方針（30という値）は全取得元で共通なので、最初から1か所に置く。PaizaFetcher には書かず、Runner から `limit:` で渡す。値が重複すると、直し忘れがそのままルール違反になる
+- 止める処理（ループ）は、今は PaizaFetcher に書く。共通化は2つ目の取得元を作るときに、実物を見て判断する（いつ別のサイトを取るかわからないため）
+- 共通化の案（2026-10-30 に検討、今は採らない）
+
+  | 案 | 形 | 良い点 | 弱い点 |
+  |---|---|---|---|
+  | A. Fetcher は「候補の URL を優先順に並べる」だけにし、取得済みを飛ばす・件数で止める・1件ずつ取る・失敗を扱う、を Runner に寄せる | `PaizaFetcher#candidate_urls` → Runner が skip と limit を適用して取得 | 共通部分が Runner に集まり、Fetcher がとても小さくなる | API の取得元に合わない（Greenhouse は1回のリクエストで本文ごと全件返る） |
+  | B. 今の形（`fetch_new(limit:, skip:)` が原文の配列を返す）のまま、2つ目の取得元を作るときに共通部分を抜き出す | 今は PaizaFetcher に素直に書く | 取得元ごとの取り方の違い（sitemap＋1件ずつ、API で一括）を吸収できる | 2つ目を作るまでは、共通にできる部分も PaizaFetcher の中にある |
+
+  「2つ目で気づき、3つ目で抜き出す」。1つしか例がないと、共通と固有の線を推測で引くことになる。今は B
 
 ### DBスキーマ
 ```
