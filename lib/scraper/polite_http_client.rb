@@ -17,7 +17,7 @@ module Scraper
       @requested = false
     end
 
-    # 200 なら本文を返す。403 / 429 は AccessRefused、それ以外の失敗は RequestFailed
+    # 200 なら Response（本文のバイト列と Content-Type）を返す。403 / 429 は AccessRefused、それ以外の失敗は RequestFailed
     def get(url)
       wait_for_interval
       response = request(URI(url))
@@ -46,17 +46,12 @@ module Scraper
     def handle_response(response, url)
       case response.code
       when "200"
-        body_of(response)
+        Response.new(body: response.body.to_s.b, content_type: response["Content-Type"])
       when "403", "429"
         raise AccessRefused, "url: #{url}, status: #{response.code}"
       else
         raise RequestFailed, "url: #{url}, status: #{response.code}"
       end
-    end
-
-    # Net::HTTP は本文を文字コード不明（ASCII-8BIT）のバイト列で返す。paiza のページは UTF-8 なので、そのように読む
-    def body_of(response)
-      response.body.to_s.dup.force_encoding(Encoding::UTF_8)
     end
   end
 end

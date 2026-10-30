@@ -11,10 +11,17 @@ RSpec.describe Scraper::PoliteHttpClient do
 
   describe "#get" do
     context "200が返るとき" do
-      before { stub_request(:get, url).to_return(status: 200, body: "<html>求人</html>") }
+      before do
+        stub_request(:get, url).to_return(status: 200, body: "<html>求人</html>", headers: { "Content-Type" => "text/html; charset=utf-8" })
+      end
 
-      it "本文を返すこと" do
-        expect(client.get(url)).to eq("<html>求人</html>")
+      # 本文は文字コードを決めずにバイト列のまま返す（UTF-8 として読むのは取得元を知っている Fetcher の仕事）
+      it "本文をバイト列のまま返すこと" do
+        expect(client.get(url).body).to eq("<html>求人</html>".b)
+      end
+
+      it "Content-Typeを返すこと" do
+        expect(client.get(url).content_type).to eq("text/html; charset=utf-8")
       end
 
       it "User-Agentでアクセスすること" do

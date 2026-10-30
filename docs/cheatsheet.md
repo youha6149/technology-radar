@@ -56,6 +56,6 @@
 
 | 担当 | 仕事 |
 |---|---|
-| `Scraper::PoliteHttpClient` | User-Agent、2回目以降に5秒待つ（`sleeper:` で外から渡す）、リダイレクトを追わない、タイムアウトを短めに明示。成功は200だけ。403 / 429 は `AccessRefused`、それ以外の失敗（3xx・404・500・タイムアウト・接続できない）は `RequestFailed` |
-| `Scraper::PaizaFetcher` | sitemap を lastmod の新しい順に並べる、取得済みを飛ばす（`skip:`）、`limit:` 件で止める |
-| `Scraper::Runner`（予定） | 1日30件という値を `limit:` で渡す。sitemap が取れない・403 / 429 なら中断、詳細ページ1件の失敗は飛ばして続ける |
+| `Scraper::PoliteHttpClient` | `Scraper::Response`（本文のバイト列と Content-Type）を返す。User-Agent、2回目以降に5秒待つ（`sleeper:` で外から渡す）、リダイレクトを追わない、タイムアウトを短めに明示。成功は200だけ。403 / 429 は `AccessRefused`、それ以外の失敗（3xx・404・500・タイムアウト・接続できない）は `RequestFailed` |
+| `Scraper::PaizaFetcher` | sitemap（gzip を展開）から `/career/job_offers/{数字}` を取り出し、lastmod の新しい順に並べる、取得済みを飛ばす（`skip:`）、`limit:` 回リクエストしたら止める（失敗も数える）、1件取るたびにブロックへ渡す、`RequestFailed` の1件は飛ばす（`get` だけを rescue）、UTF-8 として読む |
+| `Scraper::Runner`（予定） | 1日30件という値を `limit:` で渡す。最初に、拒否されて止まっていないか確かめ、まだ変換していない原文を変換する。ブロックの中で原文を保存して変換し、DB の失敗はその1件だけ飛ばす。sitemap が取れない・403 / 429 なら中断し、拒否は `scrape_runs` に記録して以後の定期実行を止める |

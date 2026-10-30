@@ -94,17 +94,17 @@
 - `app/` ではなく `lib/` に置く理由: Zeitwerk では `app/` 直下のディレクトリがそれぞれ読み込みの起点になるため、`app/scraper/paiza_parser.rb` は `Scraper::PaizaParser` ではなく `PaizaParser` になる。Rails 8 の `config.autoload_lib` で `lib/scraper/paiza_parser.rb` は `Scraper::PaizaParser` として読み込まれる
 
 ```
-rake jobs:fetch
- └ Scraper::Runner#call …………………… 全体の流れだけを持つ（Service Object）
-     ├ PaizaFetcher#fetch_new(limit:, skip:) → [Payload(url, content_type, body)]
+rake scraper:fetch（定期実行では Solid Queue のジョブから同じ Runner を呼ぶ）
+ └ Scraper::Runner#call …………………… 全体の流れだけを持つ（Service Object）。最初に、前回拒否されていないか確かめ、まだ変換していない原文を変換する
+     ├ PaizaFetcher#fetch_new(limit:, skip:) { |payload| … } …… 1件取るたびにブロックへ渡す
      │     └ PoliteHttpClient#get(url) …… 間隔・UA
-     └ Payloadごとに:
+     └ ブロックの中（Payloadごとに）:
          ├ RawDocument.create! ……………… 必ず保存
          └ ParseRawDocument#call(raw) …… 失敗しても次のPayloadへ進む
                └ PaizaParser#parse(body) → Hash（DBにもHTTPにも触れない）
                  → Job.create! または raw.update!(parse_error:)
 
-rake jobs:reparse ……………………… 保存済みの原文に ParseRawDocument をかけ直す
+rake scraper:reparse ……………………… 保存済みの原文に ParseRawDocument をかけ直す
 ```
 
 | 設計判断 | 理由 |
@@ -128,10 +128,12 @@ rake jobs:reparse ……………………… 保存済みの原文に ParseRawD
 
 ```ruby
 client  = Scraper::PoliteHttpClient.new(user_agent: "technology-radar (personal use)", interval: 5)
-client.get(url)   # → 本文（String）。200以外は例外。3xx も例外（追わない）。403 / 429 は「拒否された」専用の例外
+client.get(url)   # → Scraper::Response（本文のバイト列と Content-Type）。200以外は例外。3xx も例外（追わない）。403 / 429 は AccessRefused
 
 fetcher = Scraper::PaizaFetcher.new(client: client)
-fetcher.fetch_new(limit: 30, skip: ->(url) { RawDocument.exists?(url: url) })   # → [Payload(url, content_type, body)]
+fetcher.fetch_new(limit: 30, skip: ->(url) { RawDocument.exists?(url: url) }) do |payload|
+  # Runner: その場で原文を保存し、jobs に変換する
+end
 ```
 
 **仕事の分け方**: 「取得元が変わっても同じか？」で分ける。同じなら PoliteHttpClient、取得元ごとに違うなら Fetcher。
@@ -173,9 +175,29 @@ fetcher.fetch_new(limit: 30, skip: ->(url) { RawDocument.exists?(url: url) })   
   | 案 | 形 | 良い点 | 弱い点 |
   |---|---|---|---|
   | A. Fetcher は「候補の URL を優先順に並べる」だけにし、取得済みを飛ばす・件数で止める・1件ずつ取る・失敗を扱う、を Runner に寄せる | `PaizaFetcher#candidate_urls` → Runner が skip と limit を適用して取得 | 共通部分が Runner に集まり、Fetcher がとても小さくなる | API の取得元に合わない（Greenhouse は1回のリクエストで本文ごと全件返る） |
-  | B. 今の形（`fetch_new(limit:, skip:)` が原文の配列を返す）のまま、2つ目の取得元を作るときに共通部分を抜き出す | 今は PaizaFetcher に素直に書く | 取得元ごとの取り方の違い（sitemap＋1件ずつ、API で一括）を吸収できる | 2つ目を作るまでは、共通にできる部分も PaizaFetcher の中にある |
+  | B. 今の形（`fetch_new(limit:, skip:)` が原文を1件ずつブロックに渡す）のまま、2つ目の取得元を作るときに共通部分を抜き出す | 今は PaizaFetcher に素直に書く | 取得元ごとの取り方の違い（sitemap＋1件ずつ、API で一括）を吸収できる | 2つ目を作るまでは、共通にできる部分も PaizaFetcher の中にある |
 
   「2つ目で気づき、3つ目で抜き出す」。1つしか例がないと、共通と固有の線を推測で引くことになる。今は B
+
+### 定期実行（人が見ていない自動実行）のための決定（2026-10-31、批判的レビューを受けて）
+目的: 人が見ていない自動実行でも、取得のルール（1日30回・拒否されたら止める）を守り、異常に気づけるようにする。
+
+| 決定 | 理由 |
+|---|---|
+| Fetcher は1件取るたびにブロックへ渡す（全件を配列で返さない）。Runner はその場で保存・変換する | 途中で止まっても（例外・プロセスの停止）、それまでの分が DB に残る。DB への保存は1件ずつ（1日30件なので誤差。クエリの回数がボトルネックになったら見直す） |
+| `limit` は**送ったリクエストの数**を数える（失敗も含む）。同じ日の再実行はしない | 障害の日も30回で必ず止まる。翌日の定期実行がそのまま再実行になる |
+| Fetcher の `rescue Scraper::RequestFailed` は `get` だけを囲み、`yield` は囲まない。`AccessRefused` と sitemap の失敗は外へ投げる | ループを持つ Fetcher だけが1件を飛ばせる。拒否は全体を止める |
+| ブロックの中（Runner）の DB の失敗は、その1件だけ記録して次へ | その記録だけの問題なので、全体は止めない。DB を知っているのは Runner |
+| Runner は実行の最初に、まだ変換していない原文（`parse_error` が NULL で jobs がない）を変換する | 保存のあと、変換の前に止まった原文が、翌日「取得済み」として飛ばされたままになるのを防ぐ |
+| 拒否（403 / 429）されたら、定期実行を止める。次の実行は最初に `scrape_runs` を見て、拒否されていたら何もせずに終わる。再開は人が確かめてから手で行う。状態はアプリの画面に出す | 「拒否されたら回避しない」。利用者は1人で毎日アプリを開くので、画面に出せば気づける |
+| 本物の paiza への取得は、本番の環境からだけ行う | 開発環境は DB が別なので、1日の上限も取得済みの判定も共有できない |
+| `PoliteHttpClient#get` は本文の**バイト列**と `Content-Type` を返すように変える。UTF-8 として読む・gzip を展開する、は Fetcher に移す | どちらも paiza の事情で、「取得元に関係ないものだけを共通にする」原則に合わない。`Content-Type` は原文をそのまま保存するために要る。paiza の sitemap は `application/x-gzip` で返り、`Content-Encoding: gzip` は付かないので、Net::HTTP は自動では展開しない |
+| 取るもの: 未取得の求人を `lastmod` の新しい順に。足りない日は古い求人も取る（A） | データは分析用に貯める。sitemap にある求人は古くても掲載中。`lastmod` は更新日時なので、頻繁に更新される求人に偏る可能性はある。カードに出す順番は別に決められる |
+| sitemap の URL は `/career/job_offers/{数字}` だけを使う | sitemap には求人ではない `/career/job_offers/list/prefecture-…` が224件混ざっている（2026-10-25 時点） |
+
+**作らないもの（様子を見てから）**
+- `fetch_failures`（URL ごとの失敗の回数）: 掲載終了の URL が sitemap から消えるなら不要。`scrape_runs` の失敗の数を見て、毎回失敗する URL が枠を食っているとわかってから足す
+- 同じ日の再実行、メールや Slack への通知
 
 ### DBスキーマ
 ```
@@ -185,6 +207,8 @@ jobs           id, raw_document_id[FK, unique], title, company, position,
                technologies(JSON配列), features(JSON配列), extracted_at
 reactions      id, job_id[FK, unique], verdict(1 / -1), created_at
 reasons        id, reaction_id[FK], aspect(tech_stack / description / salary / position), comment(NULL可)
+scrape_runs    id, source, started_at, finished_at, status(running / succeeded / refused / failed),
+               requests_count, saved_count, failed_count, error_message   （2026-10-31 追加予定。定期実行の記録）
 ```
 
 | 判断 | 理由 |
@@ -230,7 +254,7 @@ reasons        id, reaction_id[FK], aspect(tech_stack / description / salary / p
 - RSpec を使う
 - 書き方は Better Specs（https://www.betterspecs.org/）に従う。古い記述（have(n).items、Spork/Zeus、Guardの設定例）は採用しない
 - rubocop-rspec を導入（デフォルト設定から開始）。ルールの無効化・緩和は理由を残して行う
-- 外部HTTPは WebMock でスタブする
+- 外部HTTPは WebMock でスタブする（PoliteHttpClient のテスト）。PoliteHttpClient を使う側（PaizaFetcher など）のテストは、`instance_double` の偽物のクライアントで書く
 - テストケースを考える観点: 同値分割 / 境界値 / 異常系（空・不正値・欠損） / 外部依存の失敗 / 状態遷移
 
 ### 期間

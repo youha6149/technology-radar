@@ -20,6 +20,9 @@ walking skeleton（画面まで通す）を優先したため、後回しにし�
 ## 取得（Fetcher）
 - [ ] `PaizaFetcher`（sitemap → lastmod の新しい順 → 未取得のみ、1日30件、間隔5秒）
 - [ ] 2つ目の取得元を作るときに、Fetcher の共通部分（取得済みを飛ばす・件数で止める・失敗の扱い）を抜き出すか見直す（design.md「取得部分の設計」の案A / B）
+- [x] `PoliteHttpClient#get` を、本文のバイト列と Content-Type を返す形に変える（`Scraper::Response`）（UTF-8 として読むのは Fetcher へ）
+- [ ] `scrape_runs` テーブルと `Scraper::Runner`（拒否で停止、まだ変換していない原文の変換、DB の失敗は1件だけ飛ばす）
+- [ ] （様子を見てから）`fetch_failures`: `scrape_runs` の失敗の数を見て、毎回失敗する URL が毎日の枠を食っているとわかったら足す
 - [x] `PoliteHttpClient`（UA・2回目以降に5秒待つ・リダイレクトを追わない・タイムアウト・200だけ成功・403/429 は AccessRefused・それ以外は RequestFailed）。12件のテストあり、実装をわざと壊すと赤くなることも確認
 - [ ] 原文そのものがおかしいとき（想定外のページ・途中で切れている・ロボット対策ページ）の再取得の扱い。「取得済みURLは再取得しない」ルールの例外をどうするか
 
