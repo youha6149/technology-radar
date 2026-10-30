@@ -42,7 +42,7 @@ gem "thruster", require: false
 
 # json 3.x は JSON.generate の quirks_mode 引数を受け付けず、ActiveSupport 8.0.5 の json カラムの
 # シリアライズ（マイグレーションの default: [] など）が ArgumentError になるため 2.x に固定する（2026-10-26）
-gem "json", "~> 2.10"
+gem "json", "~> 3.1"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
